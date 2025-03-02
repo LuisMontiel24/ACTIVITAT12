@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Joc Endevinar Paraula</title>
+    <link rel="stylesheet" href="joc.css">
+</head>
+<body>
+    <header>
+        <h1>Joc Endevinar Paraula</h1>
+    </header>
+
+    <main>
+        <section class="form-section">
+            <label for="paraulaSecreta">Introdueix la paraula secreta:</label>
+            <div class="password-wrapper">
+                <input type="password" id="paraulaSecreta" placeholder="Introdueix una paraula">
+                <button id="togglePassword" title="Mostrar/Ocultar paraula">👁️</button>
+            </div>
+            <button id="startGame">Començar partida</button>
+        </section>
+
+        <section class="game-display">
+            <p id="paraulaMostrada" class="hidden-word"></p>
+            <p id="intentsRestants">Intents restants: 10</p>
+        </section>
+
+        <section class="letter-buttons" id="botonsLletres"></section>
+
+        <section class="player-info">
+            <div class="stats">
+                <p id="partidesTotals">Partides totals: 0</p>
+                <p id="partidesGuanyades">Partides guanyades: 0</p>
+                <p id="millorPuntuacio">Millor puntuació: -</p>
+            </div>
+            <div id="imatgeJoc">
+                <img src="imatges_p2/img_0.jpg" alt="Hangman" id="imatgePenjat">
+            </div>
+        </section>
+    </main>
+    <script>
+        const paraulaInput = document.getElementById("paraulaSecreta");
+        const togglePassword = document.getElementById("togglePassword");
+        const startButton = document.getElementById("startGame");
+        const paraulaMostrada = document.getElementById("paraulaMostrada");
+        const intentsRestantsElement = document.getElementById("intentsRestants");
+        const botonsLletres = document.getElementById("botonsLletres");
+        const imatgePenjat = document.getElementById("imatgePenjat");
+
+        let paraulaSecreta = [];
+        let paraulaUsuari = [];
+        let intentsRestants = 10;
+        let imatgeIndex = 0;
+
+        togglePassword.addEventListener("click", () => {
+            paraulaInput.type = paraulaInput.type === "password" ? "text" : "password";
+        });
+
+        startButton.addEventListener("click", async () => {
+            const paraula = paraulaInput.value.trim();
+            if (paraula.length < 4 || /\d/.test(paraula)) {
+                alert("La paraula ha de tenir almenys 4 caràcters i no pot contenir números.");
+                return;
+            }
+
+            paraulaSecreta = paraula.toUpperCase().split("");
+            paraulaUsuari = Array(paraulaSecreta.length).fill("_");
+            paraulaMostrada.textContent = paraulaUsuari.join(" ");
+            intentsRestants = 10;
+            intentsRestantsElement.textContent = `Intents restants: ${intentsRestants}`;
+            startButton.disabled = true;
+            paraulaInput.disabled = true;
+            generarBotons();
+            actualitzarImatge();
+
+            await fetch("http://localhost:8000/words/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ word: paraula, theme: "general" })
+            });
+        });
+
+        function generarBotons() {
+            botonsLletres.innerHTML = "";
+            for (let i = 65; i <= 90; i++) {
+                const lletra = String.fromCharCode(i);
+                const boto = document.createElement("button");
+                boto.textContent = lletra;
+                boto.addEventListener("click", () => manejarLletra(lletra, boto));
+                botonsLletres.appendChild(boto);
+            }
+        }
+
+        async function manejarLletra(lletra, boto) {
+            boto.disabled = true;
+            if (paraulaSecreta.includes(lletra)) {
+                paraulaSecreta.forEach((char, index) => {
+                    if (char === lletra) paraulaUsuari[index] = lletra;
+                });
+            } else {
+                intentsRestants--;
+                imatgeIndex++;
+            }
+
+            paraulaMostrada.textContent = paraulaUsuari.join(" ");
+            intentsRestantsElement.textContent = `Intents restants: ${intentsRestants}`;
+            actualitzarImatge();
+
+            if (!paraulaUsuari.includes("_")) {
+                alert("Has guanyat!");
+                await registrarJoc(true);
+                reiniciarPartida();
+            } else if (intentsRestants === 0) {
+                alert(`Has perdut! La paraula era ${paraulaSecreta.join("")}.`);
+                await registrarJoc(false);
+                reiniciarPartida();
+            }
+        }
+
+        async function registrarJoc(guanyat) {
+            await fetch("http://localhost:8000/game_logs/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: 1,
+                    word_id: 1,
+                    attempts: 10 - intentsRestants,
+                    errors: 10 - intentsRestants,
+                    score: guanyat ? 100 : 0,
+                    finished: true
+                })
+            });
+        }
+
+        function actualitzarImatge() {
+            const imgIndexRevers = 9 - imatgeIndex;
+            imatgePenjat.src = `imatges_p2/img_${imgIndexRevers}.jpg`;
+        }
+
+        function reiniciarPartida() {
+            startButton.disabled = false;
+            paraulaInput.disabled = false;
+            paraulaInput.value = "";
+            botonsLletres.innerHTML = "";
+            paraulaMostrada.textContent = "";
+            intentsRestants = 10;
+            imatgeIndex = 0;
+            actualitzarImatge();
+        }
+    </script>
+</body>
+</html>
